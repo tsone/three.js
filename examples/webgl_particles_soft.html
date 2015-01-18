@@ -71,7 +71,7 @@
 		<script id="particleFS" type="x-shader/x-fragment">
 
 			uniform sampler2D texture;
-			uniform sampler2D colorDepthTex;
+			uniform sampler2D depthTex;
 			uniform vec2 invResolution;
 			uniform float softenCoeff;
 
@@ -90,7 +90,7 @@
 
 				vec4 color = texture2D( texture, gl_PointCoord );
 				// Depth was encoded as 1/1000, so we need to scale it back.
-				float bgDepth = 1000.0 * unpackDepth( texture2D( colorDepthTex, gl_FragCoord.xy * invResolution ) );
+				float bgDepth = 1000.0 * unpackDepth( texture2D( depthTex, gl_FragCoord.xy * invResolution ) );
 				float soften = min( softenCoeff * (bgDepth - depth), 1.0 );
 				gl_FragColor = vec4( color.rgb, fade*soften * color.a );
 
@@ -113,7 +113,7 @@
 
 				const vec4 bit_shift = vec4( 256.0*256.0*256.0, 256.0*256.0, 256.0, 1.0 );
 				const vec4 bit_mask = vec4( 0.0, 1.0/256.0, 1.0/256.0, 1.0/256.0 );
-				vec4 res = mod( depth * bit_shift * vec4( 255.0 ), vec4( 256.0 ) ) / vec4( 255.0 );
+				vec4 res = fract( depth * bit_shift );
 				res -= res.xxyz * bit_mask;
 				return res;
 
@@ -209,7 +209,7 @@
 					invResolution: { type: 'v2', value: THREE.Vector2( 1/window.innerWidth, 1/window.innerHeight ) },
 					softenCoeff: { type: 'f', value: SOFTEN_COEFF }, 
 					texture: { type: 't', value: particleTex },
-					colorDepthTex: { type: 't', value: rtDepth }
+					depthTex: { type: 't', value: rtDepth }
 				};
 
 				var particleMat = new THREE.ShaderMaterial( {
@@ -274,7 +274,7 @@
 				rtDepth.height = scaledHeight;
 				rtDepth = rtDepth.clone();
 
-				particleUnif[ 'colorDepthTex' ].value = rtDepth;
+				particleUnif[ 'depthTex' ].value = rtDepth;
 				particleUnif[ 'invResolution' ].value = new THREE.Vector2( 1/window.innerWidth, 1/window.innerHeight );
 				particleUnif[ 'particleScale' ].value = window.innerHeight;
 
