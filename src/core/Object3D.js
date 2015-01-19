@@ -65,6 +65,7 @@ THREE.Object3D = function () {
 	this.matrixWorldNeedsUpdate = false;
 
 	this.visible = true;
+	this.layerBits = THREE.Object3D.DefaultLayerBits;
 
 	this.castShadow = false;
 	this.receiveShadow = false;
@@ -76,6 +77,7 @@ THREE.Object3D = function () {
 };
 
 THREE.Object3D.DefaultUp = new THREE.Vector3( 0, 1, 0 );
+THREE.Object3D.DefaultLayerBits = 0xFFFFFFFF;
 
 THREE.Object3D.prototype = {
 
@@ -488,6 +490,12 @@ THREE.Object3D.prototype = {
 
 	}(),
 
+	isVisible: function ( camera ) {
+
+		return this.visible && ( ( camera.cullingMask & this.layerBits ) !== 0 );
+
+	},
+
 	raycast: function () {},
 
 	traverse: function ( callback ) {
@@ -753,6 +761,7 @@ THREE.Object3D.prototype = {
 		object.matrixWorldNeedsUpdate = this.matrixWorldNeedsUpdate;
 
 		object.visible = this.visible;
+		object.layerBits = this.layerBits;
 
 		object.castShadow = this.castShadow;
 		object.receiveShadow = this.receiveShadow;

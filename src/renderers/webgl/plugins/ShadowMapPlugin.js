@@ -213,6 +213,8 @@ THREE.ShadowMapPlugin = function ( _renderer, _lights, _webglObjects, _webglObje
 
 			//
 
+			shadowCamera.cullingMask = light.layerBits;
+
 			shadowCamera.position.setFromMatrixPosition( light.matrixWorld );
 			_matrixPosition.setFromMatrixPosition( light.target.matrixWorld );
 			shadowCamera.lookAt( _matrixPosition );
@@ -318,7 +320,7 @@ THREE.ShadowMapPlugin = function ( _renderer, _lights, _webglObjects, _webglObje
 				webglObject = _webglObjectsImmediate[ j ];
 				object = webglObject.object;
 
-				if ( object.visible && object.castShadow ) {
+				if ( object.isVisible( shadowCamera ) && object.castShadow ) {
 
 					object._modelViewMatrix.multiplyMatrices( shadowCamera.matrixWorldInverse, object.matrixWorld );
 
@@ -350,7 +352,7 @@ THREE.ShadowMapPlugin = function ( _renderer, _lights, _webglObjects, _webglObje
 
 	function projectObject( scene, object, shadowCamera ){
 
-		if ( object.visible ) {
+		if ( object.isVisible( shadowCamera ) ) {
 
 			var webglObjects = _webglObjects[ object.id ];
 
