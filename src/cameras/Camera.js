@@ -13,7 +13,11 @@ THREE.Camera = function () {
 	this.matrixWorldInverse = new THREE.Matrix4();
 	this.projectionMatrix = new THREE.Matrix4();
 
+	this.cullingMask = THREE.Camera.DefaultCullingMask;
+
 };
+
+THREE.Camera.DefaultCullingMask = 0xFFFFFFFF;
 
 THREE.Camera.prototype = Object.create( THREE.Object3D.prototype );
 THREE.Camera.prototype.constructor = THREE.Camera;
@@ -59,5 +63,8 @@ THREE.Camera.prototype.clone = function ( camera ) {
 	camera.matrixWorldInverse.copy( this.matrixWorldInverse );
 	camera.projectionMatrix.copy( this.projectionMatrix );
 
+	camera.cullingMask = this.cullingMask;
+
 	return camera;
 };
+

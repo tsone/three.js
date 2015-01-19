@@ -114,6 +114,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 	_currentMaterialId = - 1,
 	_currentGeometryProgram = '',
 	_currentCamera = null,
+	_updateCameraUniforms = true,
 
 	_usedTextureUnits = 0,
 
@@ -280,6 +281,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		_currentProgram = null;
 		_currentCamera = null;
+		_updateCameraUniforms = true;
 
 		_oldBlending = - 1;
 		_oldDepthTest = - 1;
@@ -3269,6 +3271,13 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	}
 
+	function setCurrentCamera ( camera ) {
+
+		_updateCameraUniforms = _updateCameraUniforms || ( camera !== _currentCamera );
+		_currentCamera = camera;
+
+	}
+
 	// Rendering
 
 	this.render = function ( scene, camera, renderTarget, forceClear ) {
@@ -3282,11 +3291,12 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		var fog = scene.fog;
 
+		setCurrentCamera( camera );
+
 		// reset caching for this frame
 
 		_currentGeometryProgram = '';
 		_currentMaterialId = - 1;
-		_currentCamera = null;
 		_lightsNeedUpdate = true;
 
 		// update scene graph
@@ -3356,7 +3366,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 			var webglObject = _webglObjectsImmediate[ i ];
 			var object = webglObject.object;
 
-			if ( object.visible ) {
+			if ( object.isVisible( camera ) ) {
 
 				setupMatrices( object, camera );
 
@@ -3421,7 +3431,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	function projectObject( object ) {
 
-		if ( object.visible === false ) return;
+		if ( object.isVisible( _currentCamera ) === false ) return;
 
 		if ( object instanceof THREE.Scene || object instanceof THREE.Group ) {
 
@@ -3538,7 +3548,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 			var webglObject = renderList[ i ];
 			var object = webglObject.object;
 
-			if ( object.visible ) {
+			if ( object.isVisible( camera ) ) {
 
 				if ( overrideMaterial ) {
 
@@ -4315,6 +4325,8 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		_usedTextureUnits = 0;
 
+		setCurrentCamera( camera );
+
 		if ( material.needsUpdate ) {
 
 			if ( material.program ) deallocateMaterial( material );
@@ -4362,7 +4374,9 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		}
 
-		if ( refreshProgram || camera !== _currentCamera ) {
+		if ( refreshProgram || _updateCameraUniforms ) {
+
+			_updateCameraUniforms = false;
 
 			_gl.uniformMatrix4fv( p_uniforms.projectionMatrix, false, camera.projectionMatrix.elements );
 
@@ -4371,9 +4385,6 @@ THREE.WebGLRenderer = function ( parameters ) {
 				_gl.uniform1f( p_uniforms.logDepthBufFC, 2.0 / ( Math.log( camera.far + 1.0 ) / Math.LN2 ) );
 
 			}
-
-
-			if ( camera !== _currentCamera ) _currentCamera = camera;
 
 			// load material specific uniforms
 			// (shader material also gets them for the sake of genericity)
@@ -5270,7 +5281,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			if ( light instanceof THREE.AmbientLight ) {
 
-				if ( ! light.visible ) continue;
+				if ( ! light.isVisible( _currentCamera ) ) continue;
 
 				if ( _this.gammaInput ) {
 
@@ -5290,7 +5301,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				dirCount += 1;
 
-				if ( ! light.visible ) continue;
+				if ( ! light.isVisible( _currentCamera ) ) continue;
 
 				_direction.setFromMatrixPosition( light.matrixWorld );
 				_vector3.setFromMatrixPosition( light.target.matrixWorld );
@@ -5319,7 +5330,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				pointCount += 1;
 
-				if ( ! light.visible ) continue;
+				if ( ! light.isVisible( _currentCamera ) ) continue;
 
 				pointOffset = pointLength * 3;
 
@@ -5347,7 +5358,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				spotCount += 1;
 
-				if ( ! light.visible ) continue;
+				if ( ! light.isVisible( _currentCamera ) ) continue;
 
 				spotOffset = spotLength * 3;
 
@@ -5386,7 +5397,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 				hemiCount += 1;
 
-				if ( ! light.visible ) continue;
+				if ( ! light.isVisible( _currentCamera ) ) continue;
 
 				_direction.setFromMatrixPosition( light.matrixWorld );
 				_direction.normalize();
@@ -6361,7 +6372,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			var light = lights[ l ];
 
-			if ( light.onlyShadow || light.visible === false ) continue;
+			if ( light.onlyShadow || light.isVisible( _currentCamera ) === false ) continue;
 
 			if ( light instanceof THREE.DirectionalLight ) dirLights ++;
 			if ( light instanceof THREE.PointLight ) pointLights ++;

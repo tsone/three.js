@@ -13,6 +13,8 @@ THREE.CubeCamera = function ( near, far, cubeResolution ) {
 
 	var fov = 90, aspect = 1;
 
+	this.cullingMask = THREE.Camera.DefaultCullingMask;
+
 	var cameraPX = new THREE.PerspectiveCamera( fov, aspect, near, far );
 	cameraPX.up.set( 0, - 1, 0 );
 	cameraPX.lookAt( new THREE.Vector3( 1, 0, 0 ) );
@@ -49,28 +51,24 @@ THREE.CubeCamera = function ( near, far, cubeResolution ) {
 
 		var renderTarget = this.renderTarget;
 		var generateMipmaps = renderTarget.generateMipmaps;
+		var cameras = [ cameraPX, cameraNX, cameraPY, cameraNY, cameraPZ, cameraNZ ];
 
 		renderTarget.generateMipmaps = false;
 
-		renderTarget.activeCubeFace = 0;
-		renderer.render( scene, cameraPX, renderTarget );
+		for ( var i = 0; i < 6; i ++ ) {
 
-		renderTarget.activeCubeFace = 1;
-		renderer.render( scene, cameraNX, renderTarget );
+			if ( i == 5 ) {
 
-		renderTarget.activeCubeFace = 2;
-		renderer.render( scene, cameraPY, renderTarget );
+				renderTarget.generateMipmaps = generateMipmaps;
 
-		renderTarget.activeCubeFace = 3;
-		renderer.render( scene, cameraNY, renderTarget );
+			}
 
-		renderTarget.activeCubeFace = 4;
-		renderer.render( scene, cameraPZ, renderTarget );
+			cameras[ i ].cullingMask = this.cullingMask;
 
-		renderTarget.generateMipmaps = generateMipmaps;
-
-		renderTarget.activeCubeFace = 5;
-		renderer.render( scene, cameraNZ, renderTarget );
+			renderTarget.activeCubeFace = i;
+			renderer.render( scene, cameras[ i ], renderTarget );
+		
+		}
 
 	};
 
