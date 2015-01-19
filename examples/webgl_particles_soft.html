@@ -351,7 +351,7 @@
 					scene.overrideMaterial = depthMat;
 					camera.cullingMask &= ~ (1 << 0); // Hide particles on layer 0.
 					renderer.setClearColor( 0xffffff, 1 );
-					renderer.clearTarget( rtDepth, true, true, false )
+					renderer.clearTarget( rtDepth, true, true, false );
 					renderer.render( scene, camera, rtDepth );
 
 					// 2) Render scene normally. Particles use a shader which reduces
@@ -368,7 +368,7 @@
 					scene.overrideMaterial = null;
 					camera.cullingMask |= (1 << 0);
 					renderer.setClearColor( 0xffffff, 1 );
-					renderer.clearTarget( rtDepth, true, false, false )
+					renderer.clearTarget( rtDepth, true, false, false );
 					renderer.setClearColor( 0x000000, 0 );
 					renderer.render( scene, camera );
 
