@@ -90,6 +90,7 @@ THREE.ShaderLib = {
 				THREE.ShaderChunk[ "linear_to_gamma_fragment" ],
 
 				THREE.ShaderChunk[ "fog_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -217,6 +218,7 @@ THREE.ShaderLib = {
 				THREE.ShaderChunk[ "linear_to_gamma_fragment" ],
 
 				THREE.ShaderChunk[ "fog_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -336,6 +338,7 @@ THREE.ShaderLib = {
 				THREE.ShaderChunk[ "linear_to_gamma_fragment" ],
 
 				THREE.ShaderChunk[ "fog_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -404,6 +407,7 @@ THREE.ShaderLib = {
 				THREE.ShaderChunk[ "color_fragment" ],
 				THREE.ShaderChunk[ "shadowmap_fragment" ],
 				THREE.ShaderChunk[ "fog_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -478,6 +482,7 @@ THREE.ShaderLib = {
 				THREE.ShaderChunk[ "logdepthbuf_fragment" ],
 				THREE.ShaderChunk[ "color_fragment" ],
 				THREE.ShaderChunk[ "fog_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -535,6 +540,8 @@ THREE.ShaderLib = {
 			"	float color = 1.0 - smoothstep( mNear, mFar, depth );",
 			"	gl_FragColor = vec4( vec3( color ), opacity );",
 
+				THREE.ShaderChunk[ "epilog_fragment" ],
+
 			"}"
 
 		].join("\n")
@@ -580,6 +587,7 @@ THREE.ShaderLib = {
 			"	gl_FragColor = vec4( 0.5 * normalize( vNormal ) + 0.5, opacity );",
 
 				THREE.ShaderChunk[ "logdepthbuf_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -629,6 +637,7 @@ THREE.ShaderLib = {
 			"	gl_FragColor = textureCube( tCube, vec3( tFlip * vWorldPosition.x, vWorldPosition.yz ) );",
 
 				THREE.ShaderChunk[ "logdepthbuf_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -683,6 +692,7 @@ THREE.ShaderLib = {
 				"gl_FragColor = texture2D( tEquirect, sampleUV );",
 
 				THREE.ShaderChunk[ "logdepthbuf_fragment" ],
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
@@ -756,6 +766,8 @@ THREE.ShaderLib = {
 				//"float z = ( ( gl_FragCoord.z / gl_FragCoord.w ) - 3.0 ) / ( 4000.0 - 3.0 );",
 				//"gl_FragData[ 0 ] = pack_depth( z );",
 				//"gl_FragData[ 0 ] = vec4( z, z, z, 1.0 );",
+
+				THREE.ShaderChunk[ "epilog_fragment" ],
 
 			"}"
 
