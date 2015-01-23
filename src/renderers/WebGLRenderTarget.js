@@ -1,7 +1,6 @@
 /**
  * @author szimek / https://github.com/szimek/
  * @author alteredq / http://alteredqualia.com/
- * @author tsone / http://github.com/tsone/
  */
 
 THREE.WebGLRenderTarget = function ( width, height, options ) {

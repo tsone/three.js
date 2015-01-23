@@ -3,7 +3,6 @@
  * @author mrdoob / http://mrdoob.com/
  * @author alteredq / http://alteredqualia.com/
  * @author szimek / https://github.com/szimek/
- * @author tsone / https://github.com/tsone/
  */
 
 THREE.WebGLRenderer = function ( parameters ) {
@@ -6018,180 +6017,168 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	// Render targets
 
-	function setupFrameBuffer ( framebuffer, renderTarget, textureTarget ) {
+	function createRenderTargetDepthStencil ( renderTarget ) {
 
-		_gl.bindFramebuffer( _gl.FRAMEBUFFER, framebuffer );
-		_gl.framebufferTexture2D( _gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, textureTarget, renderTarget.__webglTexture, 0 );
+		if ( ! renderTarget.depthBuffer ) {
 
-	}
+	 		if ( renderTarget.stencilBuffer ) {
 
-	function setupRenderBuffer ( renderbuffer, renderTarget  ) {
+				console.warn( "WebGLRenderer: rendertarget can't have stencil without depth buffer - please enable depth buffer to use stencil" );
 
-		_gl.bindRenderbuffer( _gl.RENDERBUFFER, renderbuffer );
+			}
 
-		if ( renderTarget.depthBuffer && ! renderTarget.stencilBuffer ) {
+			return undefined;
 
-			_gl.renderbufferStorage( _gl.RENDERBUFFER, _gl.DEPTH_COMPONENT16, renderTarget.width, renderTarget.height );
-			_gl.framebufferRenderbuffer( _gl.FRAMEBUFFER, _gl.DEPTH_ATTACHMENT, _gl.RENDERBUFFER, renderbuffer );
+		}
 
-		/* For some reason this is not working. Defaulting to RGBA4.
-		} else if ( ! renderTarget.depthBuffer && renderTarget.stencilBuffer ) {
+		var renderbuffer;
 
-			_gl.renderbufferStorage( _gl.RENDERBUFFER, _gl.STENCIL_INDEX8, renderTarget.width, renderTarget.height );
-			_gl.framebufferRenderbuffer( _gl.FRAMEBUFFER, _gl.STENCIL_ATTACHMENT, _gl.RENDERBUFFER, renderbuffer );
-		*/
-		} else if ( renderTarget.depthBuffer && renderTarget.stencilBuffer ) {
+		if ( renderTarget.shareDepthFrom ) {
 
-			_gl.renderbufferStorage( _gl.RENDERBUFFER, _gl.DEPTH_STENCIL, renderTarget.width, renderTarget.height );
-			_gl.framebufferRenderbuffer( _gl.FRAMEBUFFER, _gl.DEPTH_STENCIL_ATTACHMENT, _gl.RENDERBUFFER, renderbuffer );
+			renderbuffer = renderTarget.shareDepthFrom.__webglRenderbuffer;
+			_gl.bindRenderbuffer( _gl.RENDERBUFFER, renderbuffer );
 
 		} else {
 
-			_gl.renderbufferStorage( _gl.RENDERBUFFER, _gl.RGBA4, renderTarget.width, renderTarget.height );
+			renderbuffer = _gl.createRenderbuffer();
+			_gl.bindRenderbuffer( _gl.RENDERBUFFER, renderbuffer );
+
+			var glFormat = renderTarget.stencilBuffer ? _gl.DEPTH_STENCIL : _gl.DEPTH_COMPONENT16;
+			_gl.renderbufferStorage( _gl.RENDERBUFFER, glFormat, renderTarget.width, renderTarget.height );
 
 		}
+
+		var glAttachment = renderTarget.stencilBuffer ? _gl.DEPTH_STENCIL_ATTACHMENT : _gl.DEPTH_ATTACHMENT;
+		_gl.framebufferRenderbuffer( _gl.FRAMEBUFFER, glAttachment, _gl.RENDERBUFFER, renderbuffer );
+
+		return renderbuffer;
 
 	}
 
-	this.setRenderTarget = function ( renderTarget ) {
+	function createRenderTargetTexture ( texture, glTarget, isPOT ) {
 
-		var isCube = ( renderTarget instanceof THREE.WebGLRenderTargetCube );
+		texture.__webglTexture = _gl.createTexture();
 
-		if ( renderTarget && renderTarget.__webglFramebuffer === undefined ) {
+		_this.info.memory.textures ++;
 
-			if ( renderTarget.depthBuffer === undefined ) renderTarget.depthBuffer = true;
-			if ( renderTarget.stencilBuffer === undefined ) renderTarget.stencilBuffer = true;
+		_gl.bindTexture( glTarget, texture.__webglTexture );
 
-			renderTarget.addEventListener( 'dispose', onRenderTargetDispose );
+		setTextureParameters( glTarget, texture, isPOT );
 
-			renderTarget.__webglTexture = _gl.createTexture();
+	}
 
-			_this.info.memory.textures ++;
+	function setupRenderTargetTexture ( renderTarget, texture, glAttachment, isPOT ) {
 
-			// Setup texture, create render and frame buffers
+		var glFormat = paramThreeToGL( texture.format );
+		var glType = paramThreeToGL( texture.type );
 
-			var isTargetPowerOfTwo = THREE.Math.isPowerOfTwo( renderTarget.width ) && THREE.Math.isPowerOfTwo( renderTarget.height ),
-				glFormat = paramThreeToGL( renderTarget.format ),
-				glType = paramThreeToGL( renderTarget.type );
+		_gl.texImage2D( _gl.TEXTURE_2D, 0, glFormat, renderTarget.width, renderTarget.height, 0, glFormat, glType, null );
 
-			if ( isCube ) {
+		_gl.framebufferTexture2D( _gl.FRAMEBUFFER, glAttachment, _gl.TEXTURE_2D, texture.__webglTexture, 0 );
 
-				renderTarget.__webglFramebuffer = [];
-				renderTarget.__webglRenderbuffer = [];
+		if ( isPOT ) _gl.generateMipmap( _gl.TEXTURE_2D );
 
-				_gl.bindTexture( _gl.TEXTURE_CUBE_MAP, renderTarget.__webglTexture );
-				setTextureParameters( _gl.TEXTURE_CUBE_MAP, renderTarget, isTargetPowerOfTwo );
+	}
 
-				for ( var i = 0; i < 6; i ++ ) {
+	function setupRenderTarget ( renderTarget, isPOT ) {
 
-					renderTarget.__webglFramebuffer[ i ] = _gl.createFramebuffer();
-					renderTarget.__webglRenderbuffer[ i ] = _gl.createRenderbuffer();
+		if ( renderTarget.__webglFramebuffer !== undefined ) return;
 
-					_gl.texImage2D( _gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, glFormat, renderTarget.width, renderTarget.height, 0, glFormat, glType, null );
+		renderTarget.addEventListener( 'dispose', onRenderTargetDispose );
 
-					setupFrameBuffer( renderTarget.__webglFramebuffer[ i ], renderTarget, _gl.TEXTURE_CUBE_MAP_POSITIVE_X + i );
-					setupRenderBuffer( renderTarget.__webglRenderbuffer[ i ], renderTarget );
+		var ext = _supportsDrawBuffers;
+		var glAttachmentBase = ext ? ext.COLOR_ATTACHMENT0_WEBGL : _gl.COLOR_ATTACHMENT0;
 
-				}
+		renderTarget.__webglFramebuffer = _gl.createFramebuffer();
+		_gl.bindFramebuffer( _gl.FRAMEBUFFER, renderTarget.__webglFramebuffer );
 
-				if ( isTargetPowerOfTwo ) _gl.generateMipmap( _gl.TEXTURE_CUBE_MAP );
+		renderTarget.__webglRenderbuffer = createRenderTargetDepthStencil( renderTarget );
 
-			} else {
+		createRenderTargetTexture( renderTarget, _gl.TEXTURE_2D, isPOT );
+		setupRenderTargetTexture( renderTarget, renderTarget, glAttachmentBase, isPOT );
 
-				renderTarget.__webglFramebuffer = _gl.createFramebuffer();
+		var numAttached = 1;
 
-				if ( renderTarget.shareDepthFrom ) {
+		for ( var i = 0; i < renderTarget.extraColorTextures.length; i ++ ) {
 
-					renderTarget.__webglRenderbuffer = renderTarget.shareDepthFrom.__webglRenderbuffer;
+			if ( numAttached >= _maxDrawBuffers ) {
 
-				} else {
+				console.warn( 'WebGLRenderer: rendertarget has too many color textures - this GPU supports ' + _maxDrawBuffers );
 
-					renderTarget.__webglRenderbuffer = _gl.createRenderbuffer();
-
-				}
-
-				_gl.bindTexture( _gl.TEXTURE_2D, renderTarget.__webglTexture );
-				setTextureParameters( _gl.TEXTURE_2D, renderTarget, isTargetPowerOfTwo );
-
-				_gl.texImage2D( _gl.TEXTURE_2D, 0, glFormat, renderTarget.width, renderTarget.height, 0, glFormat, glType, null );
-
-				setupFrameBuffer( renderTarget.__webglFramebuffer, renderTarget, _gl.TEXTURE_2D );
-
-				if ( renderTarget.shareDepthFrom ) {
-
-					if ( renderTarget.depthBuffer && ! renderTarget.stencilBuffer ) {
-
-						_gl.framebufferRenderbuffer( _gl.FRAMEBUFFER, _gl.DEPTH_ATTACHMENT, _gl.RENDERBUFFER, renderTarget.__webglRenderbuffer );
-
-					} else if ( renderTarget.depthBuffer && renderTarget.stencilBuffer ) {
-
-						_gl.framebufferRenderbuffer( _gl.FRAMEBUFFER, _gl.DEPTH_STENCIL_ATTACHMENT, _gl.RENDERBUFFER, renderTarget.__webglRenderbuffer );
-
-					}
-
-				} else {
-
-					setupRenderBuffer( renderTarget.__webglRenderbuffer, renderTarget );
-
-				}
-
-				if ( isTargetPowerOfTwo ) _gl.generateMipmap( _gl.TEXTURE_2D );
+				break;
 
 			}
 
-			// Release everything
+			var texture = renderTarget.extraColorTextures[ i ];
 
-			if ( isCube ) {
+			createRenderTargetTexture( texture, _gl.TEXTURE_2D, isPOT );
+			setupRenderTargetTexture( renderTarget, texture, glAttachmentBase + numAttached, isPOT );
 
-				_gl.bindTexture( _gl.TEXTURE_CUBE_MAP, null );
-
-			} else {
-
-				_gl.bindTexture( _gl.TEXTURE_2D, null );
-
-			}
-
-			_gl.bindRenderbuffer( _gl.RENDERBUFFER, null );
-			_gl.bindFramebuffer( _gl.FRAMEBUFFER, null );
+			numAttached ++;
 
 		}
 
-		var framebuffer, width, height, vx, vy;
+		if ( ext ) {
 
-		if ( renderTarget ) {
+			var drawBuffers = new Array( numAttached );
 
-			if ( isCube ) {
+			for ( var i = 0; i < numAttached; i ++ ) {
 
-				framebuffer = renderTarget.__webglFramebuffer[ renderTarget.activeCubeFace ];
-
-			} else {
-
-				framebuffer = renderTarget.__webglFramebuffer;
+				drawBuffers[ i ] = ext.COLOR_ATTACHMENT0_WEBGL + i;
 
 			}
 
-			width = renderTarget.width;
-			height = renderTarget.height;
-
-			vx = 0;
-			vy = 0;
-
-		} else {
-
-			framebuffer = null;
-
-			width = _viewportWidth;
-			height = _viewportHeight;
-
-			vx = _viewportX;
-			vy = _viewportY;
+			ext.drawBuffersWEBGL( drawBuffers );
 
 		}
+
+		_gl.bindTexture( _gl.TEXTURE_2D, null );
+		_gl.bindRenderbuffer( _gl.RENDERBUFFER, null );
+		_gl.bindFramebuffer( _gl.FRAMEBUFFER, null );
+
+	};
+
+	function setupRenderTargetCube ( renderTarget, isPOT ) {
+
+		if ( renderTarget.__webglFramebuffer !== undefined ) return;
+
+		renderTarget.addEventListener( 'dispose', onRenderTargetDispose );
+
+		renderTarget.__webglFramebuffer = [];
+		renderTarget.__webglRenderbuffer = [];
+
+		createRenderTargetTexture( renderTarget, _gl.TEXTURE_CUBE_MAP, isPOT );
+
+		var glFormat = paramThreeToGL( renderTarget.format );
+		var glType = paramThreeToGL( renderTarget.type );
+
+		for ( var i = 0; i < 6; i ++ ) {
+
+			renderTarget.__webglFramebuffer[ i ] = _gl.createFramebuffer();
+			_gl.bindFramebuffer( _gl.FRAMEBUFFER, renderTarget.__webglFramebuffer[ i ] );
+
+			renderTarget.__webglRenderbuffer[ i ] = createRenderTargetDepthStencil( renderTarget );
+
+			_gl.texImage2D( _gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, glFormat, renderTarget.width, renderTarget.height, 0, glFormat, glType, null );
+
+			_gl.framebufferTexture2D( _gl.FRAMEBUFFER, _gl.COLOR_ATTACHMENT0, _gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, renderTarget.__webglTexture, 0 );
+
+		}
+
+		if ( isPOT ) _gl.generateMipmap( _gl.TEXTURE_CUBE_MAP );
+
+		_gl.bindTexture( _gl.TEXTURE_CUBE_MAP, null );
+		_gl.bindRenderbuffer( _gl.RENDERBUFFER, null );
+		_gl.bindFramebuffer( _gl.FRAMEBUFFER, null );
+
+	}
+
+	function changeFramebuffer( framebuffer, x, y, width, height ) {
 
 		if ( framebuffer !== _currentFramebuffer ) {
 
 			_gl.bindFramebuffer( _gl.FRAMEBUFFER, framebuffer );
-			_gl.viewport( vx, vy, width, height );
+			_gl.viewport( x, y, width, height );
 
 			_currentFramebuffer = framebuffer;
 
@@ -6200,6 +6187,36 @@ THREE.WebGLRenderer = function ( parameters ) {
 // TODO: tsone: this looks wrong as size is set without setting viewport...?
 		_currentWidth = width;
 		_currentHeight = height;
+
+	}
+
+	this.setRenderTarget = function ( renderTarget ) {
+
+		if ( renderTarget ) {
+
+			var isPOT = THREE.Math.isPowerOfTwo( renderTarget.width ) && THREE.Math.isPowerOfTwo( renderTarget.height );
+
+			var framebuffer;
+
+			if ( renderTarget instanceof THREE.WebGLRenderTargetCube ) {
+
+				setupRenderTargetCube( renderTarget, isPOT );
+				framebuffer = renderTarget.__webglFramebuffer[ renderTarget.activeCubeFace ];
+
+			} else {
+
+				setupRenderTarget( renderTarget, isPOT );
+				framebuffer = renderTarget.__webglFramebuffer;
+
+			}
+
+			changeFramebuffer( framebuffer, 0, 0, renderTarget.width, renderTarget.height );
+
+		} else {
+
+			changeFramebuffer( null, _viewportX, _viewportY, _viewportWidth, _viewportHeight );
+
+		}
 
 	};
 
