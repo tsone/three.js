@@ -1,35 +1,33 @@
 /**
  * @author szimek / https://github.com/szimek/
  * @author alteredq / http://alteredqualia.com/
+ * @author tsone / http://github.com/tsone/
  */
 
 THREE.WebGLRenderTarget = function ( width, height, options ) {
 
-	this.width = width;
-	this.height = height;
-
 	options = options || {};
 
-	this.wrapS = options.wrapS !== undefined ? options.wrapS : THREE.ClampToEdgeWrapping;
-	this.wrapT = options.wrapT !== undefined ? options.wrapT : THREE.ClampToEdgeWrapping;
-
-	this.magFilter = options.magFilter !== undefined ? options.magFilter : THREE.LinearFilter;
-	this.minFilter = options.minFilter !== undefined ? options.minFilter : THREE.LinearMipMapLinearFilter;
-
-	this.anisotropy = options.anisotropy !== undefined ? options.anisotropy : 1;
-
-	this.offset = new THREE.Vector2( 0, 0 );
-	this.repeat = new THREE.Vector2( 1, 1 );
-
-	this.format = options.format !== undefined ? options.format : THREE.RGBAFormat;
-	this.type = options.type !== undefined ? options.type : THREE.UnsignedByteType;
+	THREE.TextureParams.call( this, options );
 
 	this.depthBuffer = options.depthBuffer !== undefined ? options.depthBuffer : true;
 	this.stencilBuffer = options.stencilBuffer !== undefined ? options.stencilBuffer : true;
 
-	this.generateMipmaps = true;
-
 	this.shareDepthFrom = options.shareDepthFrom !== undefined ? options.shareDepthFrom : null;
+
+	this.extraColorTextures = [];
+
+	if ( options.extraColorTextures !== undefined ) {
+
+		for ( var i = 0; i < options.extraColorTextures.length; i ++ ) {
+
+			this.extraColorTextures[ i ] = options.extraColorTextures[ i ].clone();
+
+		}
+
+	}
+
+	this.setSize( width, height );
 
 };
 
@@ -42,34 +40,30 @@ THREE.WebGLRenderTarget.prototype = {
 		this.width = width;
 		this.height = height;
 
+		for ( var i = 0; i < this.extraColorTextures.length; i ++ ) {
+
+			var texture = this.extraColorTextures[ i ];
+
+			texture.width = width;
+			texture.height = height;
+
+		}
+
 	},
 
-	clone: function () {
+	clone: function ( renderTarget ) {
 
-		var tmp = new THREE.WebGLRenderTarget( this.width, this.height );
+		if ( renderTarget === undefined ) {
 
-		tmp.wrapS = this.wrapS;
-		tmp.wrapT = this.wrapT;
+			return new THREE.WebGLRenderTarget( this.width, this.height, this );
 
-		tmp.magFilter = this.magFilter;
-		tmp.minFilter = this.minFilter;
+		} else {
 
-		tmp.anisotropy = this.anisotropy;
+			THREE.WebGLRenderTarget.call( renderTarget, this.width, this.height, this );
 
-		tmp.offset.copy( this.offset );
-		tmp.repeat.copy( this.repeat );
+			return renderTarget;
 
-		tmp.format = this.format;
-		tmp.type = this.type;
-
-		tmp.depthBuffer = this.depthBuffer;
-		tmp.stencilBuffer = this.stencilBuffer;
-
-		tmp.generateMipmaps = this.generateMipmaps;
-
-		tmp.shareDepthFrom = this.shareDepthFrom;
-
-		return tmp;
+		}
 
 	},
 

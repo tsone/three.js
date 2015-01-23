@@ -20,7 +20,10 @@ THREE.TextureParams = function ( options ) {
 	this.type = options.type !== undefined ? options.type : THREE.UnsignedByteType;
 
 	this.offset = new THREE.Vector2( 0, 0 );
+	if ( options.offset !== undefined ) this.offset.copy( options.offset );
+
 	this.repeat = new THREE.Vector2( 1, 1 );
+	if ( options.repeat !== undefined ) this.repeat.copy( options.repeat );
 
 	this.generateMipmaps = options.generateMipmaps !== undefined ? options.generateMipmaps : true;
 
@@ -30,16 +33,19 @@ THREE.TextureParams.prototype = {
 
 	constructor: THREE.TextureParams,	
 
-	clone: function ( texture ) {
+	clone: function ( params ) {
 
-		if ( texture === undefined ) texture = new THREE.TextureParams();
+		if ( params === undefined ) {
 
-		THREE.TextureParams.call( texture, this );
+			return new THREE.TextureParams( this );
 
-		texture.offset.copy( this.offset );
-		texture.repeat.copy( this.repeat );
+		} else {
 
-		return texture;
+			THREE.TextureParams.call( params, this );
+
+			return params;
+
+		}
 
 	}
 

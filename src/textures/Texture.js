@@ -5,7 +5,7 @@
  * @author tsone / https://github.com/tsone/
  */
 
-THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy, options ) {
+THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy ) {
 
 	Object.defineProperty( this, 'id', { value: THREE.TextureIdCount ++ } );
 
@@ -13,7 +13,7 @@ THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, f
 
 	this.name = '';
 
-	options = options || {};
+	var options = {};
 
 	options.mapping = mapping;
 	options.wrapS = wrapS;
