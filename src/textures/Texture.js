@@ -2,9 +2,10 @@
  * @author mrdoob / http://mrdoob.com/
  * @author alteredq / http://alteredqualia.com/
  * @author szimek / https://github.com/szimek/
+ * @author tsone / https://github.com/tsone/
  */
 
-THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy ) {
+THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy, options ) {
 
 	Object.defineProperty( this, 'id', { value: THREE.TextureIdCount ++ } );
 
@@ -12,26 +13,22 @@ THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, f
 
 	this.name = '';
 
+	options = options || {};
+
+	options.mapping = mapping;
+	options.wrapS = wrapS;
+	options.wrapT = wrapT;
+	options.magFilter = magFilter;
+	options.minFilter = minFilter;
+	options.format = format;
+	options.type = type;
+	options.anisotropy = anisotropy;
+
+	THREE.TextureParams.call( this, options );
+
 	this.image = image !== undefined ? image : THREE.Texture.DEFAULT_IMAGE;
 	this.mipmaps = [];
 
-	this.mapping = mapping !== undefined ? mapping : THREE.Texture.DEFAULT_MAPPING;
-
-	this.wrapS = wrapS !== undefined ? wrapS : THREE.ClampToEdgeWrapping;
-	this.wrapT = wrapT !== undefined ? wrapT : THREE.ClampToEdgeWrapping;
-
-	this.magFilter = magFilter !== undefined ? magFilter : THREE.LinearFilter;
-	this.minFilter = minFilter !== undefined ? minFilter : THREE.LinearMipMapLinearFilter;
-
-	this.anisotropy = anisotropy !== undefined ? anisotropy : 1;
-
-	this.format = format !== undefined ? format : THREE.RGBAFormat;
-	this.type = type !== undefined ? type : THREE.UnsignedByteType;
-
-	this.offset = new THREE.Vector2( 0, 0 );
-	this.repeat = new THREE.Vector2( 1, 1 );
-
-	this.generateMipmaps = true;
 	this.premultiplyAlpha = false;
 	this.flipY = true;
 	this.unpackAlignment = 4; // valid values: 1, 2, 4, 8 (see http://www.khronos.org/opengles/sdk/docs/man/xhtml/glPixelStorei.xml)
@@ -42,7 +39,6 @@ THREE.Texture = function ( image, mapping, wrapS, wrapT, magFilter, minFilter, f
 };
 
 THREE.Texture.DEFAULT_IMAGE = undefined;
-THREE.Texture.DEFAULT_MAPPING = THREE.UVMapping;
 
 THREE.Texture.prototype = {
 
@@ -66,26 +62,11 @@ THREE.Texture.prototype = {
 
 		if ( texture === undefined ) texture = new THREE.Texture();
 
+		THREE.TextureParams.prototype.clone.call( this, texture );
+
 		texture.image = this.image;
 		texture.mipmaps = this.mipmaps.slice( 0 );
 
-		texture.mapping = this.mapping;
-
-		texture.wrapS = this.wrapS;
-		texture.wrapT = this.wrapT;
-
-		texture.magFilter = this.magFilter;
-		texture.minFilter = this.minFilter;
-
-		texture.anisotropy = this.anisotropy;
-
-		texture.format = this.format;
-		texture.type = this.type;
-
-		texture.offset.copy( this.offset );
-		texture.repeat.copy( this.repeat );
-
-		texture.generateMipmaps = this.generateMipmaps;
 		texture.premultiplyAlpha = this.premultiplyAlpha;
 		texture.flipY = this.flipY;
 		texture.unpackAlignment = this.unpackAlignment;

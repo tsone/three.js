@@ -63,6 +63,7 @@
 	"src/materials/ShaderMaterial.js",
 	"src/materials/RawShaderMaterial.js",
 	"src/materials/SpriteMaterial.js",
+	"src/textures/TextureParams.js",
 	"src/textures/Texture.js",
 	"src/textures/CubeTexture.js",
 	"src/textures/CompressedTexture.js",
