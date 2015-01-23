@@ -426,7 +426,6 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	};
 
-
 	this.supportsCompressedTextureS3TC = function () {
 
 		return extensions.get( 'WEBGL_compressed_texture_s3tc' );
@@ -885,13 +884,22 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	};
 
+	function deallocateRenderTargetTexture ( texture ) {
+
+		if ( ! texture.__webglTexture ) return;
+
+		_gl.deleteTexture( texture.__webglTexture );
+		delete texture.__webglTexture;
+
+		_this.info.memory.textures --;
+
+	}
+
 	var deallocateRenderTarget = function ( renderTarget ) {
 
-		if ( ! renderTarget || renderTarget.__webglTexture === undefined ) return;
+		if ( ! renderTarget ) return;
 
-		_gl.deleteTexture( renderTarget.__webglTexture );
-
-		delete renderTarget.__webglTexture;
+		deallocateRenderTargetTexture( renderTarget );
 
 		if ( renderTarget instanceof THREE.WebGLRenderTargetCube ) {
 
@@ -903,6 +911,14 @@ THREE.WebGLRenderer = function ( parameters ) {
 			}
 
 		} else {
+
+			for ( var i = 0; i < renderTarget.extraColorTextures.length; i ++ ) {
+
+				var texture = renderTarget.extraColorTextures[ i ];
+
+				deallocateRenderTargetTexture( texture );
+
+			}
 
 			_gl.deleteFramebuffer( renderTarget.__webglFramebuffer );
 			_gl.deleteRenderbuffer( renderTarget.__webglRenderbuffer );
@@ -3409,11 +3425,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		// Generate mipmap if we're using any kind of mipmap filtering
 
-		if ( renderTarget && renderTarget.generateMipmaps && renderTarget.minFilter !== THREE.NearestFilter && renderTarget.minFilter !== THREE.LinearFilter ) {
-
-			updateRenderTargetMipmap( renderTarget );
-
-		}
+		if ( renderTarget ) updateRenderTargetMipmap( renderTarget );
 
 		// Ensure depth buffer writing is enabled so it can be cleared on next render
 
@@ -6239,21 +6251,32 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	};
 
+	function updateRenderTargetTextureMipmap ( texture, glTarget ) {
+
+		if ( ! texture.generateMipmaps || texture.minFilter === THREE.NearestFilter || texture.minFilter === THREE.LinearFilter ) return false;
+
+		_gl.bindTexture( glTarget, texture.__webglTexture );
+		_gl.generateMipmap( glTarget );
+
+		return true;
+
+	}
+
 	function updateRenderTargetMipmap ( renderTarget ) {
 
-		if ( renderTarget instanceof THREE.WebGLRenderTargetCube ) {
+		var glTarget = renderTarget instanceof THREE.WebGLRenderTargetCube ? _gl.TEXTURE_CUBE_MAP : _gl.TEXTURE_2D;
 
-			_gl.bindTexture( _gl.TEXTURE_CUBE_MAP, renderTarget.__webglTexture );
-			_gl.generateMipmap( _gl.TEXTURE_CUBE_MAP );
-			_gl.bindTexture( _gl.TEXTURE_CUBE_MAP, null );
+		var wasUpdated = updateRenderTargetTextureMipmap( renderTarget, glTarget );
 
-		} else {
+		for ( var i = 0; i < renderTarget.extraColorTextures.length; i ++ ) {
 
-			_gl.bindTexture( _gl.TEXTURE_2D, renderTarget.__webglTexture );
-			_gl.generateMipmap( _gl.TEXTURE_2D );
-			_gl.bindTexture( _gl.TEXTURE_2D, null );
+			var texture = renderTarget.extraColorTextures[ i ];
+
+			wasUpdated |= updateRenderTargetTextureMipmap( texture, glTarget );
 
 		}
+
+		if ( wasUpdated ) _gl.bindTexture( glTarget, null );
 
 	}
 
