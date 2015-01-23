@@ -3,6 +3,7 @@
  * @author mrdoob / http://mrdoob.com/
  * @author alteredq / http://alteredqualia.com/
  * @author szimek / https://github.com/szimek/
+ * @author tsone / https://github.com/tsone/
  */
 
 THREE.WebGLRenderer = function ( parameters ) {
@@ -313,6 +314,9 @@ THREE.WebGLRenderer = function ( parameters ) {
 	var _supportsVertexTextures = _maxVertexTextures > 0;
 	var _supportsBoneTextures = _supportsVertexTextures && extensions.get( 'OES_texture_float' );
 
+	var _supportsDrawBuffers = extensions.get( 'WEBGL_draw_buffers' );
+	var _maxDrawBuffers = _supportsDrawBuffers ? _gl.getParameter( _supportsDrawBuffers.MAX_DRAW_BUFFERS_WEBGL ) : 1;
+
 	//
 
 	var _vertexShaderPrecisionHighpFloat = _gl.getShaderPrecisionFormat( _gl.VERTEX_SHADER, _gl.HIGH_FLOAT );
@@ -421,6 +425,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 		return extensions.get( 'OES_standard_derivatives' );
 
 	};
+
 
 	this.supportsCompressedTextureS3TC = function () {
 
@@ -6180,6 +6185,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		}
 
+// TODO: tsone: this looks wrong as size is set without setting viewport...?
 		_currentWidth = width;
 		_currentHeight = height;
 
