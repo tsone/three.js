@@ -89,7 +89,8 @@
 				// Depth was encoded as 1/1000, so we need to scale it back.
 				float bgDepth = 1000.0 * unpackDepth( texture2D( depthTex, gl_FragCoord.xy * invResolution ) );
 				float soften = min( softenCoeff * (bgDepth - depth), 1.0 );
-				color = soften*color.a * vec4( color.rgb, 1.0 ); // Apply alpha to RGB (not premultiplied) and soften.
+				// Apply alpha to RGB (not premultiplied) and soften. Particles are max. 50% opaque.
+				color = 0.5*soften*color.a * vec4( color.rgb, 1.0 ); 
 				float w = 1e-9 + (1.0 - 1e-9) * pow( 1.0 + depth, -5.0 );
 				gl_FragData[0] = vec4( w * color.rgb, color.a );
 				gl_FragData[1].r = w * color.a;
@@ -169,9 +170,9 @@
 			var SOFTEN_COEFF = 1.0 / 1.2;
 
 			// Divisor to window size for rendertarget size. Larger values produce more error.
-			var RENDERTARGET_SCALE = 2;
+			var RENDERTARGET_SCALE = 1;
 
-			var PARTICLE_SIZE = 8;
+			var PARTICLE_SIZE = 10;
 
 			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
