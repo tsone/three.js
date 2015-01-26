@@ -40,6 +40,8 @@
 		<script src="../build/three.js"></script>
 
 		<script src="js/Detector.js"></script>
+		<script src="js/loaders/MTLLoader.js"></script>
+		<script src="js/loaders/OBJMTLLoader.js"></script>
 		<script src="js/libs/stats.min.js"></script>
 
 		<script id="particleVS" type="x-shader/x-vertex">
@@ -56,9 +58,7 @@
 
 				gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 				depth = gl_Position.z * (far-near) / far + near;
-
-				float attenuation = 1.0 / (gl_Position.z * gl_Position.z);
-				gl_PointSize = particleSize * particleScale * attenuation;
+				gl_PointSize = particleSize * particleScale / gl_Position.z;
 
 			}
 
@@ -88,10 +88,19 @@
 				vec4 color = texture2D( texture, gl_PointCoord );
 				// Depth was encoded as 1/1000, so we need to scale it back.
 				float bgDepth = 1000.0 * unpackDepth( texture2D( depthTex, gl_FragCoord.xy * invResolution ) );
-				float soften = min( softenCoeff * (bgDepth - depth), 1.0 );
+//				float soften = min( softenCoeff * (bgDepth - depth), 1.0 );
+				float soften = clamp( softenCoeff * (bgDepth - depth), 0.0, 1.0 );
 				// Apply alpha to RGB (not premultiplied) and soften. Particles are max. 50% opaque.
-				color = 0.5*soften*color.a * vec4( color.rgb, 1.0 ); 
-				float w = 1e-9 + (1.0 - 1e-9) * pow( 1.0 + depth, -5.0 );
+//				color = soften*color.a * vec4( color.rgb, 1.0 ); 
+//				color.rgb = clamp( (color.rgb - 76.0/256.0) / (180.0/256.0) , 0.0, 1.0);
+//				color.rgb = clamp( (color.rgb - 16.0/256.0) / 2.0 , 0.0, 1.0);
+				color.rgb = clamp( (color.rgb - 0.0/256.0) / 4.0 , 0.0, 1.0);
+//				color.rgb = vec3( 0.0 );
+				color *= soften; 
+//				float w = 1e-8 + (1.0 - 1e-8) * pow( 1.0 + depth, -5.0 );
+//				float w = pow( 1.0 + depth, -5.0 );
+				float w = 1.0 / depth;
+//				float w = 1.0;
 				gl_FragData[0] = vec4( w * color.rgb, color.a );
 				gl_FragData[1].r = w * color.a;
 
@@ -156,7 +165,8 @@
 				vec4 accum = texture2D( accumTex, vUv );
 				float r = accum.a;
 				accum.a = texture2D( revealageTex, vUv ).r;
-				gl_FragColor = vec4( accum.rgb / max(accum.a, 1e-5), r );
+//				gl_FragColor = vec4( accum.rgb / accum.a, r );
+				gl_FragColor = vec4( accum.rgb / max(accum.a, 1e-6), r );
 
 			}
 
@@ -167,12 +177,12 @@
 
 			// This is inversely proportional to world-space distance: 1 / <world-space size>.
 			// Experiment to get good value for your scene.
-			var SOFTEN_COEFF = 1.0 / 1.2;
+			var SOFTEN_COEFF = 1.0 / 1.0;
 
 			// Divisor to window size for rendertarget size. Larger values produce more error.
-			var RENDERTARGET_SCALE = 1;
+			var RENDERTARGET_SCALE = 2;
 
-			var PARTICLE_SIZE = 10;
+			var PARTICLE_SIZE = 2;
 
 			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
@@ -193,6 +203,31 @@
 			var rtAccum, accumMat, accumTex, revealageTex;
 
 			var quadCam, quadMesh;
+
+			var pointLight;
+
+			var loader = new THREE.OBJMTLLoader();
+			loader.load( 'obj/sponza/sponza.obj', 'obj/sponza/sponza.mtl', function ( object ) {
+					object.traverse( function ( child ) {
+
+						if ( child instanceof THREE.Mesh ) {
+
+							child.geometry.computeVertexNormals( true );
+							child.material.shading = THREE.SmoothShading;
+							child.material.bumpScale = 0.05;
+							if ( child.material.map )
+								child.material.map.anisotropy = 8;
+							if ( child.material.bumpMap )
+								child.material.bumpMap.anisotropy = 8;
+
+						}
+
+					} );
+					opaqueRoot.add( object );
+				},
+				function ( xhr ) { console.log( (xhr.loaded / xhr.total * 100) + '% loaded' ); },
+				function ( xhr ) { console.log( 'An error happened' ); }
+			);
 
 			init();
 			animate();
@@ -215,11 +250,19 @@
 				transparentRoot = new THREE.Object3D();
 				scene.add( transparentRoot );
 
+				// Lights
+				var ambient = new THREE.AmbientLight( 0x3f3f3f );
+				scene.add( ambient );
+
+				pointLight = new THREE.PointLight( 0xd0d0d0 );
+				pointLight.position.y = 6;
+				scene.add( pointLight );
+
 				// Depth rendertarget and depth rendering material
 
 				rtDepth = new THREE.WebGLRenderTarget( scaledWidth, scaledHeight, {
-					minFilter: THREE.LinearFilter,
-					magFilter: THREE.LinearFilter,
+					minFilter: THREE.NearestFilter,
+					magFilter: THREE.NearestFilter,
 					format: THREE.RGBAFormat,
 					stencilBuffer: false
 				} );
@@ -235,16 +278,16 @@
 				// Accumulation and revealage rendertarget
 
 				var revealageParams = new THREE.TextureParams( {
-					minFilter: THREE.LinearFilter,
-					magFilter: THREE.LinearFilter,
+					minFilter: THREE.NearestFilter,
+					magFilter: THREE.NearestFilter,
 					format: THREE.RGBFormat,
 					type: THREE.FloatType,
 					generateMipmaps: false
 				} );
 
 				rtAccum = new THREE.WebGLRenderTarget( scaledWidth, scaledHeight, {
-					minFilter: THREE.LinearFilter,
-					magFilter: THREE.LinearFilter,
+					minFilter: THREE.NearestFilter,
+					magFilter: THREE.NearestFilter,
 					format: THREE.RGBAFormat,
 					type: THREE.FloatType,
 					generateMipmaps: false,
@@ -258,19 +301,23 @@
 				// Particles
 
 				var particleGeom = new THREE.Geometry();
-				var particleTex = THREE.ImageUtils.loadTexture( "textures/sprites/circle.png" );
+//				var particleTex = THREE.ImageUtils.loadTexture( "textures/sprites/circle.png" );
+				var particleTex = THREE.ImageUtils.loadTexture( "textures/smoke2.png" );
 				particleTex.minFilter = particleTex.magFilter = THREE.LinearFilter;
 
 				for ( var i = 0; i < 30; i ++ ) {
 
 					var a = 8*Math.PI * i/29;
 					var vertex = new THREE.Vector3();
-					vertex.x = 2 * Math.cos( a );
-					vertex.z = 2 * Math.sin( a );
-					vertex.y = 4 * i/29 - 2;
+					var r = 0.9 + 1.0 * i/29;
+					vertex.x = r * Math.cos( a );
+					vertex.z = r * Math.sin( a );
+					vertex.y = 5.0 * i/29 + 0.5;
 					particleGeom.vertices.push( vertex );
 
 				}
+
+//				particleGeom.vertices.push( new THREE.Vector3(0,0,0) );
 
 				particleUnif = {
 					particleSize: { type: 'f', value: PARTICLE_SIZE },
@@ -300,6 +347,7 @@
 
 				particleCloud = new THREE.PointCloud( particleGeom, particleMat );
 				transparentRoot.add( particleCloud );
+//				pointLight.add( particleCloud );
 
 				// Combine pass (full-screen quad)
 
@@ -331,7 +379,7 @@
 				var boxMat = new THREE.MeshBasicMaterial( { map: boxTex } );
 				boxMesh = new THREE.Mesh( new THREE.BoxGeometry( 4, 4, 4 ), boxMat );
 				boxMesh.position.z = 1;
-				opaqueRoot.add( boxMesh );
+//				opaqueRoot.add( boxMesh );
 
 				//
 
@@ -452,7 +500,11 @@
 
 				boxMesh.position.x = 1.7 * Math.cos( t );
 				boxMesh.rotation.y = t * 0.5;
-				particleCloud.rotation.y = t * 0.25;
+				particleCloud.rotation.y = t * 3.0;
+				particleCloud.position.x = -9 * Math.sin( t * 0.3 );
+				particleCloud.position.z = 4 * Math.sin( t * 0.6 );
+
+//				pointLight.position.x = 10 * Math.cos( 2 * t );
 
 				// 1) Render opaque objects to depth texture using a depth write material.
 				transparentRoot.visible = false;
@@ -467,13 +519,14 @@
 				opaqueRoot.visible = false;
 				scene.overrideMaterial = null;
 				renderer.setClearColor( 0x000000, 1 );
+//				renderer.setClearColor( new THREE.Color(1e-9, 1e-9, 1e-9), 1 );
 				renderer.clearTarget( rtAccum, true, false, false );
 				renderer.render( scene, camera, rtAccum );
 
 				// 3) Render scene with opaque only as background.
 				transparentRoot.visible = false;
 				opaqueRoot.visible = true;
-				renderer.setClearColor( new THREE.Color().setHSL( ( 0.333*t ) % 1.0, 1.0, 0.4 ), 0 );
+//				renderer.setClearColor( new THREE.Color().setHSL( ( 0.333*t ) % 1.0, 1.0, 0.4 ), 0 );
 				renderer.setRenderTarget( null );
 				renderer.clear( true, true, false );
 				if ( showOpaque ) renderer.render( scene, camera );
