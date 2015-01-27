@@ -79,77 +79,6 @@
 
 		</script>
 
-		<script id="verletFS" type="x-shader/x-fragment">
-
-			#extension GL_EXT_draw_buffers : require
-
-			uniform sampler2D qTex;
-			uniform sampler2D pTex;
-			uniform vec4 planes[ NUM_PLANES ];
-
-			const float drag = 0.996;
-			const vec3 gravity = vec3( 0.0, -0.0981, 0.0 );
-			const float frictionDynamic = 0.65;
-			const float bouncynessDynamic = 0.43;
-//			const float frictionStatic = 0.9;
-//			const float springConstant = 0.4;
-
-			varying vec2 vUv;
-
-			float planeDist( const in vec4 pl, const in vec3 p ) {
-
-				return dot( vec4( p, -1.0 ), pl );
-
-			}
-
-			void responsePlane( inout vec3 p, inout vec3 q, inout vec3 v, const in vec4 pl ) {
-
-				float h = - dot( pl.xyz, v );
-				float d = planeDist( pl, q );
-
-				vec3 rn = h * pl.xyz;
-				vec3 rt = rn + v;
-
-				v = rn * bouncynessDynamic + rt * frictionDynamic;
-				q = q - 2.0*d * pl.xyz + (rn + rt - v) * (d / h);
-				p = q + v;
-
-			}
-
-			void collidePlane( inout vec3 p, inout vec3 q, inout vec3 v, const in vec4 pl ) {
-
-				if ( planeDist( pl, p ) < 0.0 ) responsePlane( p, q, v, pl );
-
-			}
-
-			void main() {
-
-				vec3 q = texture2D( qTex, vUv ).xyz;
-				vec3 p = texture2D( pTex, vUv ).xyz;
-                                vec3 v = p - q;
-
-				// Accumulate forces.
-				vec3 a = vec3( 0.0 );
-//				a += p / (-1.0* length( p )); // Attractor at origin.
-				a += gravity;
-
-				// Integration step.
-				q = p;
-				v = drag * v + a;
-				p += v;
-
-				// Collision.
-				for ( int i = 0; i < NUM_PLANES; i ++ ) {
-					collidePlane( p, q, v, planes[ i ] );
-				}
-
-				gl_FragData[ 0 ] = vec4( p, 0.0 );
-				gl_FragData[ 1 ] = vec4( q, 0.0 );
-
-			}
-
-		</script>
-
 		<script>
 
 			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
@@ -267,15 +196,19 @@
 
 				// Init particle system.
 
-				var verletSrc = document.getElementById( 'verletFS' ).textContent;
 				var planeData = [
-					 0, 1, 0, -30,	// Floor
-					 1, 0, 0, -50,	// -X
-					-1, 0, 0, -50,	// X
-					 0, 0, 1, -50,	// -Z
-					 0, 0,-1, -50	// Z 
+					 0, 1, 0, 30,	// Floor plane (-Y)
+					 1, 0, 0, 50,	// -X wall
+					-1, 0, 0, 50,	// +X wall
+					 0, 0, 1, 50,	// -Z wall
+					 0, 0,-1, 50	// +Z wall
 				];
-				system = new GPUParticleSystem( SIZE, renderer, verletSrc, planeData );
+				var capsuleData = [
+					// Two capsules lying on the floor in an X-shape.
+					-25, -31, -25, 9, 25, -31,  25, 0,
+					-25, -31,  25, 9, 25, -31, -25, 0
+				];
+				system = new GPUParticleSystem( SIZE, renderer, planeData, capsuleData );
 				system.init();
 
 				// Init particle geometry for rendering.
@@ -301,13 +234,10 @@
 					depthTest: 	false,
 					depthWrite: 	false,
 					blending: 	THREE.AdditiveBlending
-				});
 
-				var particles = new THREE.Mesh( geometry, shaderMaterial );
-				particles.matrixAutoUpdate = false;
-				particles.updateMatrix();
+				} );
 
-				scene.add( particles );
+				scene.add( new THREE.Mesh( geometry, shaderMaterial ) );
 
 				//
 
