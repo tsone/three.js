@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - particles - gpu</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				background-color: #ffffff;
+				margin: 0px;
+				overflow: hidden;
+				font-family:Monospace;
+				font-size:13px;
+				text-align:center;
+				text-align:center;
+				cursor: pointer;
+			}
+
+			a {
+				color:#0078ff;
+			}
+
+			#info {
+				color: #fff;
+				position: absolute;
+				top: 10px;
+				width: 100%;
+			}
+
+		</style>
+	</head>
+	<body>
+
+		<div id="info">
+			<a href="http://threejs.org" target="_blank">three.js</a> - <span id="particles"></span> webgl - particles - gpu<br/>
+			gpu particle system with collision planes<br/>
+			select <span id="options"></span> particles<br/>
+
+		</div>
+
+		<script src="../build/three.min.js"></script>
+		<script src="js/Detector.js"></script>
+		<script src="js/libs/stats.min.js"></script>
+
+		<script src="js/GPUParticleSystem.js"></script>
+
+		<script id="particleVS" type="x-shader/x-vertex">
+
+			uniform sampler2D positionTex;
+			uniform float particleSize;
+
+			varying vec2 vUv;
+
+			void main() {
+
+				vUv = 0.5 + position.xy;
+
+				vec3 center = texture2D( positionTex, uv ).xyz;
+				vec4 p = modelViewMatrix * vec4( center, 1.0 );
+				p.xy += particleSize * position.xy;
+				gl_Position = projectionMatrix * p;
+
+			}
+
+		</script>
+
+		<script id="particleFS" type="x-shader/x-fragment">
+
+			uniform sampler2D texture;
+
+			varying vec2 vUv;
+
+			void main() {
+
+				vec4 color = texture2D( texture, vUv );
+				gl_FragColor = 0.5 * color;
+
+			}
+
+		</script>
+
+		<script id="verletFS" type="x-shader/x-fragment">
+
+			#extension GL_EXT_draw_buffers : require
+
+			uniform sampler2D qTex;
+			uniform sampler2D pTex;
+			uniform vec4 planes[ NUM_PLANES ];
+
+			const float drag = 0.996;
+			const vec3 gravity = vec3( 0.0, -0.0981, 0.0 );
+			const float frictionDynamic = 0.65;
+			const float bouncynessDynamic = 0.43;
+//			const float frictionStatic = 0.9;
+//			const float springConstant = 0.4;
+
+			varying vec2 vUv;
+
+			float planeDist( const in vec4 pl, const in vec3 p ) {
+
+				return dot( vec4( p, -1.0 ), pl );
+
+			}
+
+			void responsePlane( inout vec3 p, inout vec3 q, inout vec3 v, const in vec4 pl ) {
+
+				float h = - dot( pl.xyz, v );
+				float d = planeDist( pl, q );
+
+				vec3 rn = h * pl.xyz;
+				vec3 rt = rn + v;
+
+				v = rn * bouncynessDynamic + rt * frictionDynamic;
+				q = q - 2.0*d * pl.xyz + (rn + rt - v) * (d / h);
+				p = q + v;
+
+			}
+
+			void collidePlane( inout vec3 p, inout vec3 q, inout vec3 v, const in vec4 pl ) {
+
+				if ( planeDist( pl, p ) < 0.0 ) responsePlane( p, q, v, pl );
+
+			}
+
+			void main() {
+
+				vec3 q = texture2D( qTex, vUv ).xyz;
+				vec3 p = texture2D( pTex, vUv ).xyz;
+                                vec3 v = p - q;
+
+				// Accumulate forces.
+				vec3 a = vec3( 0.0 );
+//				a += p / (-1.0* length( p )); // Attractor at origin.
+				a += gravity;
+
+				// Integration step.
+				q = p;
+				v = drag * v + a;
+				p += v;
+
+				// Collision.
+				for ( int i = 0; i < NUM_PLANES; i ++ ) {
+					collidePlane( p, q, v, planes[ i ] );
+				}
+
+				gl_FragData[ 0 ] = vec4( p, 0.0 );
+				gl_FragData[ 1 ] = vec4( q, 0.0 );
+
+			}
+
+		</script>
+
+		<script>
+
+			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+			var hash = document.location.hash.substr( 1 );
+			if (hash) hash = parseInt(hash, 0);
+
+			var SIZE = hash || 32;
+			var PARTICLES = SIZE * SIZE;
+
+			THREE.GPUParticleGeometry = function ( size ) {
+
+				var numParticles = size * size;
+				var numTriangles = numParticles * 2;
+				var numVertices = numTriangles * 3;
+
+				THREE.BufferGeometry.call( this );
+
+				var vertices = new THREE.BufferAttribute( new Float32Array( numVertices * 2 ), 2 );
+				var uvs = new THREE.BufferAttribute( new Float32Array( numVertices * 2 ), 2 );
+
+				this.addAttribute( 'position', vertices );
+				this.addAttribute( 'uv', uvs );
+
+				var v = 0;
+				function pushVerts( arr ) {
+					for (var i=0; i < arr.length; i++) {
+						vertices.array[ v++ ] = arr[ i ];
+					}
+				}
+
+				var s = 0.5;
+				for (var f = 0; f < numParticles; f++ ) {
+
+					pushVerts( [
+						-s, -s,
+						s, -s,
+						-s, s
+					] );
+
+					pushVerts( [
+						-s, s,
+						s, -s,
+						s, s
+					] );
+
+				}
+
+				for( var v = 0; v < numVertices; v++ ) {
+
+					var i = ( v / 6 ) |0;
+					var x = ( ( i % size ) |0 ) / size;
+					var y = ( ( i / size ) |0 ) / size;
+
+					uvs.array[ v*2 ] = x;
+					uvs.array[ v*2 + 1 ] = y;
+
+				}
+
+			}
+
+			THREE.GPUParticleGeometry.prototype = Object.create( THREE.BufferGeometry.prototype );
+			THREE.GPUParticleGeometry.prototype.constructor = THREE.GPUParticleGeometry;
+
+			var container, stats;
+			var camera, scene, renderer, geometry, i, h, color;
+			var mouseX = 0, mouseY = 0;
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			document.getElementById('particles').innerText = PARTICLES;
+
+			function change(n) {
+				location.hash = n;
+				location.reload();
+				return false;
+			}
+
+
+			var options = '';
+			for (i=1; i<7; i++) {
+				var j = Math.pow(2, i);
+				options += '<a href="#" onclick="return change(' + j + ')">' + (j * j) + '</a> ';
+			}
+			document.getElementById('options').innerHTML = options;
+
+			var system;
+
+			init();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.antialias = false;
+				renderer.sortObjects = false;
+				renderer.autoClear = false;
+				renderer.autoClearColor = renderer.autoClearDepth = renderer.autoClearStencil = false;
+				renderer.setClearColor( 0x000000, 1 );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				container.appendChild( renderer.domElement );
+
+				camera = new THREE.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 1, 300 );
+				camera.position.y = 40;
+				camera.position.z = 100;
+				camera.rotation.x = -0.5;
+
+				scene = new THREE.Scene();
+
+				// Init particle system.
+
+				var verletSrc = document.getElementById( 'verletFS' ).textContent;
+				var planeData = [
+					 0, 1, 0, -30,	// Floor
+					 1, 0, 0, -50,	// -X
+					-1, 0, 0, -50,	// X
+					 0, 0, 1, -50,	// -Z
+					 0, 0,-1, -50	// Z 
+				];
+				system = new GPUParticleSystem( SIZE, renderer, verletSrc, planeData );
+				system.init();
+
+				// Init particle geometry for rendering.
+
+				var geometry = new THREE.GPUParticleGeometry( SIZE );
+
+				var particleTex = THREE.ImageUtils.loadTexture( "textures/sprites/circle.png" );
+				particleTex.minFilter = particleTex.magFilter = THREE.LinearFilter;
+
+				var uniforms = {
+
+					positionTex:	{ type: "t", value: null },
+					texture: 	{ type: "t", value: particleTex },
+					particleSize: 	{ type: "f", value: 8 }
+
+				};
+				var shaderMaterial = new THREE.ShaderMaterial( {
+
+					uniforms: 	uniforms,
+					vertexShader:   document.getElementById( 'particleVS' ).textContent,
+					fragmentShader: document.getElementById( 'particleFS' ).textContent,
+					transparent: 	true,
+					depthTest: 	false,
+					depthWrite: 	false,
+					blending: 	THREE.AdditiveBlending
+				});
+
+				var particles = new THREE.Mesh( geometry, shaderMaterial );
+				particles.matrixAutoUpdate = false;
+				particles.updateMatrix();
+
+				scene.add( particles );
+
+				//
+
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0px';
+				container.appendChild( stats.domElement );
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'touchstart', onDocumentTouchStart, false );
+				document.addEventListener( 'touchmove', onDocumentTouchMove, false );
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = event.clientX - windowHalfX;
+				mouseY = event.clientY - windowHalfY;
+
+			}
+
+			function onDocumentTouchStart( event ) {
+
+				if ( event.touches.length === 1 ) {
+
+					event.preventDefault();
+
+					mouseX = event.touches[ 0 ].pageX - windowHalfX;
+					mouseY = event.touches[ 0 ].pageY - windowHalfY;
+
+				}
+
+			}
+
+			function onDocumentTouchMove( event ) {
+
+				if ( event.touches.length === 1 ) {
+
+					event.preventDefault();
+
+					mouseX = event.touches[ 0 ].pageX - windowHalfX;
+					mouseY = event.touches[ 0 ].pageY - windowHalfY;
+
+				}
+
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+				render();
+				stats.update();
+
+			}
+
+			function render() {
+
+				system.step();
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+	</body>
+</html>
