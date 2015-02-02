@@ -42,42 +42,9 @@
 		<script src="js/Detector.js"></script>
 		<script src="js/libs/stats.min.js"></script>
 
-		<script src="js/GPUParticleSystem.js"></script>
-
-		<script id="particleVS" type="x-shader/x-vertex">
-
-			uniform sampler2D positionTex;
-			uniform float particleSize;
-
-			varying vec2 vUv;
-
-			void main() {
-
-				vUv = 0.5 + position.xy;
-
-				vec3 center = texture2D( positionTex, uv ).xyz;
-				vec4 p = modelViewMatrix * vec4( center, 1.0 );
-				p.xy += particleSize * position.xy;
-				gl_Position = projectionMatrix * p;
-
-			}
-
-		</script>
-
-		<script id="particleFS" type="x-shader/x-fragment">
-
-			uniform sampler2D texture;
-
-			varying vec2 vUv;
-
-			void main() {
-
-				vec4 color = texture2D( texture, vUv );
-				gl_FragColor = 0.5 * color;
-
-			}
-
-		</script>
+		<script src="js/gpuparticles/GPUParticleGeometry.js"></script>
+		<script src="js/gpuparticles/GPUParticleSystem.js"></script>
+		<script src="js/gpuparticles/GPUParticleEmitter.js"></script>
 
 		<script>
 
@@ -89,66 +56,17 @@
 			var SIZE = hash || 32;
 			var PARTICLES = SIZE * SIZE;
 
-			THREE.GPUParticleGeometry = function ( size ) {
-
-				var numParticles = size * size;
-				var numTriangles = numParticles * 2;
-				var numVertices = numTriangles * 3;
-
-				THREE.BufferGeometry.call( this );
-
-				var vertices = new THREE.BufferAttribute( new Float32Array( numVertices * 2 ), 2 );
-				var uvs = new THREE.BufferAttribute( new Float32Array( numVertices * 2 ), 2 );
-
-				this.addAttribute( 'position', vertices );
-				this.addAttribute( 'uv', uvs );
-
-				var v = 0;
-				function pushVerts( arr ) {
-					for (var i=0; i < arr.length; i++) {
-						vertices.array[ v++ ] = arr[ i ];
-					}
-				}
-
-				var s = 0.5;
-				for (var f = 0; f < numParticles; f++ ) {
-
-					pushVerts( [
-						-s, -s,
-						s, -s,
-						-s, s
-					] );
-
-					pushVerts( [
-						-s, s,
-						s, -s,
-						s, s
-					] );
-
-				}
-
-				for( var v = 0; v < numVertices; v++ ) {
-
-					var i = ( v / 6 ) |0;
-					var x = ( ( i % size ) |0 ) / size;
-					var y = ( ( i / size ) |0 ) / size;
-
-					uvs.array[ v*2 ] = x;
-					uvs.array[ v*2 + 1 ] = y;
-
-				}
-
-			}
-
-			THREE.GPUParticleGeometry.prototype = Object.create( THREE.BufferGeometry.prototype );
-			THREE.GPUParticleGeometry.prototype.constructor = THREE.GPUParticleGeometry;
-
 			var container, stats;
-			var camera, scene, renderer, geometry, i, h, color;
+			var camera, scene, renderer, i, h, color;
 			var mouseX = 0, mouseY = 0;
+			var angleX = 0, angleY = 0;
 
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
+
+			var particleSystem;
+
+			var testEmitters = [];
 
 			document.getElementById('particles').innerText = PARTICLES;
 
@@ -158,7 +76,6 @@
 				return false;
 			}
 
-
 			var options = '';
 			for (i=1; i<7; i++) {
 				var j = Math.pow(2, i);
@@ -166,7 +83,6 @@
 			}
 			document.getElementById('options').innerHTML = options;
 
-			var system;
 
 			init();
 			animate();
@@ -196,6 +112,19 @@
 
 				// Init particle system.
 
+				var particleTex = THREE.ImageUtils.loadTexture( "textures/sprites/circle.png" );
+				particleTex.minFilter = particleTex.magFilter = THREE.LinearFilter;
+
+// TODO: tsone: testing emitters
+
+				testEmitters[ 0 ] = new THREE.GPUParticleEmitter();
+				testEmitters[ 0 ].position.y = 30;
+				scene.add( testEmitters[ 0 ] );
+
+				testEmitters[ 1 ] = new THREE.GPUParticleEmitter();
+				testEmitters[ 1 ].position.y = 30;
+				scene.add( testEmitters[ 1 ] );
+
 				var planeData = [
 					 0, 1, 0, 30,	// Floor plane (-Y)
 					 1, 0, 0, 50,	// -X wall
@@ -208,36 +137,15 @@
 					-25, -31, -25, 9, 25, -31,  25, 0,
 					-25, -31,  25, 9, 25, -31, -25, 0
 				];
-				system = new GPUParticleSystem( SIZE, renderer, planeData, capsuleData );
-				system.init();
-
-				// Init particle geometry for rendering.
-
-				var geometry = new THREE.GPUParticleGeometry( SIZE );
-
-				var particleTex = THREE.ImageUtils.loadTexture( "textures/sprites/circle.png" );
-				particleTex.minFilter = particleTex.magFilter = THREE.LinearFilter;
-
-				var uniforms = {
-
-					positionTex:	{ type: "t", value: null },
-					texture: 	{ type: "t", value: particleTex },
-					particleSize: 	{ type: "f", value: 8 }
-
-				};
-				var shaderMaterial = new THREE.ShaderMaterial( {
-
-					uniforms: 	uniforms,
-					vertexShader:   document.getElementById( 'particleVS' ).textContent,
-					fragmentShader: document.getElementById( 'particleFS' ).textContent,
-					transparent: 	true,
-					depthTest: 	false,
-					depthWrite: 	false,
-					blending: 	THREE.AdditiveBlending
-
+				particleSystem = new THREE.GPUParticleSystem( SIZE, renderer, particleTex, {
+					planeData: planeData,
+					capsuleData: capsuleData,
+					emitters: [ testEmitters[ 1 ] ],
+//					emitters: testEmitters
 				} );
 
-				scene.add( new THREE.Mesh( geometry, shaderMaterial ) );
+				scene.add( particleSystem );
+				particleSystem.init();
 
 				//
 
@@ -309,7 +217,35 @@
 
 			function render() {
 
-				system.step();
+				var t = Date.now() / 1000;
+
+				angleX += (  0.5*Math.PI * mouseX / window.innerWidth - angleX ) * 0.05;
+//				angleY += (  0.5*Math.PI * mouseY / window.innerHeight - angleY ) * 0.05;
+
+				var r = 100;
+//				camera.position.x = r * Math.sin(angleX) * Math.cos(angleY);
+//				camera.position.y = r * Math.sin(angleY);
+//				camera.position.z = -r * Math.cos(angleX) * Math.cos(angleY);
+				camera.position.x = r * Math.sin(angleX);
+				camera.position.y = 40;
+				camera.position.z = -r * Math.cos(angleX);
+
+				camera.lookAt( scene.position );
+
+				testEmitters[ 0 ].position.x = 30 * Math.cos( t );
+				testEmitters[ 0 ].position.z = 30 * Math.sin( t );
+				testEmitters[ 0 ].scale.z = 30;
+				testEmitters[ 0 ].burstSize = 2;
+				testEmitters[ 0 ].lookAt( scene.position );
+
+				testEmitters[ 1 ].position.x = - testEmitters[ 0 ].position.x;
+				testEmitters[ 1 ].position.z = - testEmitters[ 0 ].position.z;
+				testEmitters[ 1 ].scale.x = 20;
+				testEmitters[ 1 ].scale.y = 0;
+				testEmitters[ 1 ].scale.z = 20;
+				testEmitters[ 1 ].burstSize = 3;
+
+				particleSystem.step();
 				renderer.render( scene, camera );
 
 			}
