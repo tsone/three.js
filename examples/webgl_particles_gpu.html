@@ -115,14 +115,23 @@
 				var particleTex = THREE.ImageUtils.loadTexture( "textures/sprites/circle.png" );
 				particleTex.minFilter = particleTex.magFilter = THREE.LinearFilter;
 
-// TODO: tsone: testing emitters
-
-				testEmitters[ 0 ] = new THREE.GPUParticleEmitter();
+				testEmitters[ 0 ] = new THREE.GPUParticleEmitter( {
+					velocityZ: -1,
+					velocityRandom: [ 0.1, 0.1, 0.5 ]
+				} );
 				testEmitters[ 0 ].position.y = 30;
+				testEmitters[ 0 ].scale.z = 3;
+				testEmitters[ 0 ].burstSize = 1;
 				scene.add( testEmitters[ 0 ] );
 
-				testEmitters[ 1 ] = new THREE.GPUParticleEmitter();
+				testEmitters[ 1 ] = new THREE.GPUParticleEmitter( {
+					velocityZ: -1,
+					velocityRandom: [ 0, 0, 0 ]
+				} );
 				testEmitters[ 1 ].position.y = 30;
+				testEmitters[ 1 ].rotation.x = -0.5 * 3.14;
+				testEmitters[ 1 ].scale.set( 20, 20, 1 );
+				testEmitters[ 1 ].burstSize = 2;
 				scene.add( testEmitters[ 1 ] );
 
 				var planeData = [
@@ -140,8 +149,7 @@
 				particleSystem = new THREE.GPUParticleSystem( SIZE, renderer, particleTex, {
 					planeData: planeData,
 					capsuleData: capsuleData,
-					emitters: [ testEmitters[ 1 ] ],
-//					emitters: testEmitters
+					emitters: testEmitters
 				} );
 
 				scene.add( particleSystem );
@@ -234,16 +242,10 @@
 
 				testEmitters[ 0 ].position.x = 30 * Math.cos( t );
 				testEmitters[ 0 ].position.z = 30 * Math.sin( t );
-				testEmitters[ 0 ].scale.z = 30;
-				testEmitters[ 0 ].burstSize = 2;
 				testEmitters[ 0 ].lookAt( scene.position );
 
 				testEmitters[ 1 ].position.x = - testEmitters[ 0 ].position.x;
 				testEmitters[ 1 ].position.z = - testEmitters[ 0 ].position.z;
-				testEmitters[ 1 ].scale.x = 20;
-				testEmitters[ 1 ].scale.y = 0;
-				testEmitters[ 1 ].scale.z = 20;
-				testEmitters[ 1 ].burstSize = 3;
 
 				particleSystem.step();
 				renderer.render( scene, camera );

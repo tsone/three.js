@@ -25,7 +25,8 @@ THREE.GPUParticleSystem = function ( size, renderer, particleTex, options ) {
 	var particleSize = ( options.particleSize !== undefined ) ? options.particleSize : 8;
 
 	var particleUni = {
-		positionTex:	{ type: "t", value: null },
+		pTex:		{ type: "t", value: null },
+		qTex:		{ type: "t", value: null },
 		texture: 	{ type: "t", value: particleTex },
 		particleSize: 	{ type: "f", value: particleSize }
 	};
@@ -47,11 +48,10 @@ THREE.GPUParticleSystem = function ( size, renderer, particleTex, options ) {
 
 	var simulationUni = {
 
-		qTex: 		{ type: "t", value: null },
 		pTex: 		{ type: "t", value: null },
+		qTex: 		{ type: "t", value: null },
 
-		gravity:	{ type: "v3", value: new THREE.Vector3( 0, -0.0981, 0 ) },
-		drag: 		{ type: "f", value: 0.996 },
+		gravityDrag:	{ type: "v4", value: new THREE.Vector4( 0, -0.0981, 0, 0.996 ) },
 		friction:	{ type: "f", value: 0.65 },
 		bouncyness: 	{ type: "f", value: 0.43 },
 
@@ -59,7 +59,7 @@ THREE.GPUParticleSystem = function ( size, renderer, particleTex, options ) {
 		capsules: 	{ type: "4fv", value: this.capsuleData },
 
 		emitterMatrix:	{ type: "Matrix4fv", value: [] },
-		emitterRandom:	{ type: "4fv", value: [] },
+		emitterRandom:	{ type: "4fv", value: [ 1/40, 1/40, 0, 0 ] },
 		emitterSpawner:	{ type: "3fv", value: [] }
 
 	};
@@ -184,12 +184,18 @@ THREE.GPUParticleSystem = function ( size, renderer, particleTex, options ) {
 			spawner.z = emitter.burstSize / size;
 			spawner.toArray( simulationUni.emitterSpawner.value, 3 * i );
 
+			var arr = simulationUni.emitterRandom.value;
+			arr[ 4 * i     ] = emitter.velocityRandom[ 0 ];
+			arr[ 4 * i + 1 ] = emitter.velocityRandom[ 1 ];
+			arr[ 4 * i + 2 ] = emitter.velocityRandom[ 2 ];
+			arr[ 4 * i + 3 ] = emitter.velocityZ;
+
 		}
 
 		// Swap rendertargets and run simulation step (=render).
 
-		simulationUni.qTex.value = this.rtPrev.extraColorTextures[ 0 ];
 		simulationUni.pTex.value = this.rtPrev;
+		simulationUni.qTex.value = this.rtPrev.extraColorTextures[ 0 ];
 
 		renderer.render( quadMesh, quadCamera, this.rtCurr );
 
@@ -197,7 +203,8 @@ THREE.GPUParticleSystem = function ( size, renderer, particleTex, options ) {
 		this.rtPrev = this.rtCurr;
 		this.rtCurr = t;
 
-		particleUni.positionTex.value = this.rtCurr;
+		particleUni.pTex.value = this.rtCurr;
+		particleUni.qTex.value = this.rtCurr.extraColorTextures[ 0 ];
 
 	};
 
@@ -224,11 +231,10 @@ THREE.GPUParticleSystem.simulationFS = [
 
 	"#extension GL_EXT_draw_buffers : require",
 
-	"uniform sampler2D qTex;",
 	"uniform sampler2D pTex;",
+	"uniform sampler2D qTex;",
 
-	"uniform vec3 gravity;",
-	"uniform float drag;",
+	"uniform vec4 gravityDrag;",
 	"uniform float friction;",
 	"uniform float bouncyness;",
 //			uniform float frictionStatic; // 0.9
@@ -304,42 +310,47 @@ THREE.GPUParticleSystem.simulationFS = [
 
 	"}",
 
-	"void emitter( inout vec3 p, inout float life, inout vec3 q, const vec3 rnd, const in mat4 matrix, const in vec4 random, const in vec3 spawner ) {",
+	"void emit( inout vec3 p, inout vec3 q, const vec3 rnd, const vec3 rnd2, const in mat4 matrix, const in vec4 random ) {",
 
-		"vec2 dist = abs( spawner.xy - vUv );",
-
-		"if ( dist.x + dist.y <= spawner.z ) {",
-
-			"life = 120.0;",
-
-// TODO: tsone: replace with better hash
-
-//				"vec3 v = emitZ.xyz * (emitP.w - rnd.z*emitZ.w) - rnd.x*emitX.w * emitX.xyz - rnd.y*emitY.w * emitY.xyz;",
-//				"p = emitP.xyz + rnd.y * emitX.xyz + rnd.x * emitY.xyz;",
-//				"q = p - v;",
-			"p = ( matrix * vec4( rnd, 1.0 ) ).xyz;",
-			"q = p;",
-
-		"}",
+			"vec3 v = random.xyz * rnd2 + vec3( 0.0, 0.0, random.w );",
+			"p = rnd;",
+			"q = p + v;",
+			"p = ( matrix * vec4( p, 1.0 ) ).xyz;",
+			"q = ( matrix * vec4( q, 1.0 ) ).xyz;",
 
 	"}",
 
 	"void main() {",
 
-		"vec3 q = texture2D( qTex, vUv ).xyz;",
+		"vec4 qa = texture2D( qTex, vUv );",
+		"vec3 q = qa.xyz;",
+		"float emitterIdx = qa.w;",
 		"vec4 pa = texture2D( pTex, vUv );",
 		"vec3 p = pa.xyz;",
+		"float life = pa.w;",
 
-		// Emit new particle if current particle is dead.
+		// Emitters.
 
-		"if ( pa.w <= 0.0 ) {",
+//		"vec3 rnd = 2.0 * fract( (257.0 * 63.0 / 3.0) * vec3( vUv, vUv.x*vUv.y ) ) - 1.0;",
+		"vec3 rnd = 2.0 * hash3( vUv ) - 1.0;",
 
-//			"vec3 rnd = 2.0 * fract( (257.0 * 63.0 / 3.0) * vec3( vUv, vUv.x*vUv.y ) ) - 1.0;",
-			"vec3 rnd = 2.0 * hash3( vUv ) - 1.0;",
+		"for ( int i = 0; i < NUM_EMITTERS; i ++ ) {",
 
-			"for ( int i = 0; i < NUM_EMITTERS; i ++ ) {",
+			"if ( life <= 0.0 ) {",
 
-				"emitter( p, pa.w, q, rnd, emitterMatrix[ i ], emitterRandom[ i ], emitterSpawner[ i ] );",
+				"vec3 spawner = emitterSpawner[ i ];",
+
+				"vec2 dist = abs( spawner.xy - vUv );",
+
+				"if ( dist.x + dist.y <= spawner.z ) {",
+
+					"vec3 rnd2 = 2.0 * hash3( rnd.xy + spawner.xy ) - 1.0;",
+
+					"emit( p, q, rnd, rnd2, emitterMatrix[ i ], emitterRandom[ i ] );",
+					"life = 121.0;",
+					"emitterIdx = float( i );",
+
+				"}",
 
 			"}",
 
@@ -347,11 +358,11 @@ THREE.GPUParticleSystem.simulationFS = [
 
 		// Force accumulation.
 		"vec3 a = vec3( 0.0 );",
-//				a += p / (-1.0* length( p )); // Attractor at origin.
-		"a += gravity;",
+//		a += p / (-1.0* length( p )); // Attractor at origin.
+		"a += gravityDrag.xyz;",
 
 		// Integration.
-		"vec3 v = drag * (p - q) + a;",
+		"vec3 v = gravityDrag.w * (p - q) + a;",
 		"q = p;",
 		"p += v;",
 
@@ -370,8 +381,8 @@ THREE.GPUParticleSystem.simulationFS = [
 		"}",
 
 // TODO: tsone: reduce life randomly
-		"gl_FragData[ 0 ] = vec4( p, pa.w - 1.0 );",
-		"gl_FragData[ 1 ] = vec4( q, 0.0 );",
+		"gl_FragData[ 0 ] = vec4( p, life - 1.0 );",
+		"gl_FragData[ 1 ] = vec4( q, emitterIdx );",
 
 	"}"
 ];
@@ -382,17 +393,19 @@ THREE.GPUParticleSystem.simulationFS = [
 
 THREE.GPUParticleSystem.particleVS = [
 
-	"uniform sampler2D positionTex;",
+	"uniform sampler2D pTex;",
+	"uniform sampler2D qTex;",
 	"uniform float particleSize;",
 
 	"varying vec2 vUv;",
-	"varying float fade;",
+	"varying vec4 vColor;",
 
 	"void main() {",
 
 		"vUv = 0.5 + position.xy;",
 
-		"vec4 p = texture2D( positionTex, uv );",
+		"vec4 p = texture2D( pTex, uv );",
+		"float emitterIdx = texture2D( qTex, uv ).a;",
 
 		"vec3 center = p.xyz;",
 		"vec4 mvPosition = modelViewMatrix * vec4( center, 1.0 );",
@@ -400,7 +413,8 @@ THREE.GPUParticleSystem.particleVS = [
 		"gl_Position = projectionMatrix * mvPosition;",
 
 // TODO: tsone: set to use some proper life uniform?
-		"fade = max( p.w / 120.0, 0.0 ); ",
+		"vColor = vec4( 1.0 - emitterIdx, emitterIdx, 1.0, 1.0 );",
+		"vColor *= 0.5 * max( p.w / 120.0, 0.0 ); ",
 	"}"
 
 ];
@@ -410,12 +424,12 @@ THREE.GPUParticleSystem.particleFS = [
 	"uniform sampler2D texture;",
 
 	"varying vec2 vUv;",
-	"varying float fade;",
+	"varying vec4 vColor;",
 
 	"void main() {",
 
 		"vec4 color = texture2D( texture, vUv );",
-		"gl_FragColor = 0.5*fade * color;",
+		"gl_FragColor = vColor * color;",
 
 	"}"
 

@@ -10,6 +10,8 @@ THREE.GPUParticleEmitter = function ( options ) {
 	this.type = 'GPUParticleEmitter';
 
 	this.burstSize = options.burstSize !== undefined ? options.burstSize : 1;
+	this.velocityZ = options.velocityZ !== undefined ? options.velocityZ : 1;
+	this.velocityRandom = options.velocityRandom !== undefined ? options.velocityRandom : [ 0, 0, 0 ];
 
 };
 
